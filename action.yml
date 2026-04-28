@@ -33,7 +33,7 @@ runs:
       run: |
         #!/bin/bash
         # Substitute environment variables in install-dir input
-        install_dir=$(envsubst <<<"${input_install_dir}")
+        install_dir=$(envsubst <<< "${input_install_dir}")
 
         # cosign install script
         shopt -s expand_aliases
@@ -268,9 +268,8 @@ runs:
       env:
         input_install_dir: ${{ inputs.install-dir }}
       run: |
-        expanded_install_dir=$(envsubst <<< "${input_install_dir}")
-        safe_install_dir=$(printf '%s' "${expanded_install_dir}" | tr -d '\n\r')
-        echo "${safe_install_dir}" >> "$GITHUB_PATH"
+        safe_install_dir=$(printf '%s' "$(envsubst <<< "${input_install_dir}")" | tr -d '\n\r')
+        printf '%s\n' "${safe_install_dir}" >> "$GITHUB_PATH"
 
     - if: ${{ runner.os == 'Windows' }}
       shell: pwsh
@@ -279,4 +278,4 @@ runs:
       run: |
         $install_dir = $ExecutionContext.InvokeCommand.ExpandString("${env:input_install_dir}")
         $safe_install_dir = $install_dir -replace "`r|`n", ""
-        echo "${safe_install_dir}" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        $safe_install_dir | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
