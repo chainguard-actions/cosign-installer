@@ -2,5 +2,6 @@
   "owner": "sigstore",
   "name": "cosign-installer",
   "visibility": "public",
-  "description": "Cosign Github Action"
+  "description": "Cosign Github Action",
+  "block_publish": false
 }
