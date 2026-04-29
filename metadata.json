@@ -1,6 +1,6 @@
 {
   "owner": "sigstore",
   "name": "cosign-installer",
-  "visibility": "internal",
+  "visibility": "public",
   "description": "Cosign Github Action"
 }
