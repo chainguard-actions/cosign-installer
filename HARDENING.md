@@ -14,19 +14,19 @@ Action **sigstore--cosign-installer/v4.1.1** was hardened automatically. 2 findi
 
 ### github-env-injection (severity: high)
 
-The Linux/macOS step maps `inputs.install-dir` to the `input_install_dir` env var and then writes it directly to `$GITHUB_PATH` via `envsubst <<< "${input_install_dir}" >> "$GITHUB_PATH"` without the required sanitization step (`printf '%s' ... | tr -d '\n\r'`). An attacker-controlled `install-dir` input containing newline characters could inject arbitrary entries into GITHUB_PATH, potentially hijacking subsequent PATH lookups.
+The Linux/macOS step writes the attacker-controllable `inputs.install-dir` value (via env var `input_install_dir`) to `$GITHUB_PATH` using `envsubst <<< "${input_install_dir}" >> "$GITHUB_PATH"` without the required sanitization step (`printf '%s' ... | tr -d '\n\r'`). A malicious value containing newlines could inject arbitrary entries into the runner's PATH.
 
 Locations:
 
-- `action.yml:232`
+- `action.yml:282`
 
 ### github-env-injection (severity: high)
 
-The Windows step maps `inputs.install-dir` to the `input_install_dir` env var and then writes it to `$env:GITHUB_PATH` via PowerShell `Out-File` without any newline sanitization. An attacker-controlled `install-dir` input containing newline characters could inject arbitrary entries into GITHUB_PATH on Windows runners.
+The Windows (pwsh) step writes the attacker-controllable `inputs.install-dir` value (via env var `input_install_dir`) to `$env:GITHUB_PATH` using `echo "${install_dir}" | Out-File -FilePath $env:GITHUB_PATH` without the required sanitization step. A malicious value containing newlines could inject arbitrary entries into the runner's PATH.
 
 Locations:
 
-- `action.yml:239`
+- `action.yml:289`
 
 ## Iteration Notes
 
@@ -38,9 +38,7 @@ Locations:
 
 Fixed both github-env-injection findings in action.yml:
 
-1. Linux/macOS step: Replaced the single-line `envsubst <<< "${input_install_dir}" >> "$GITHUB_PATH"` with a multi-line run block that sanitizes the value using `printf '%s' ... | tr -d '\n\r'` before writing to $GITHUB_PATH.
+1. Linux/macOS step (line ~282): Replaced `envsubst <<<"${input_install_dir}" >> "$GITHUB_PATH"` with a sanitized version that pipes through `tr -d '\n\r'` before writing to $GITHUB_PATH, preventing newline injection.
 
-2. Windows step: Added `$safe_install_dir = $install_dir -replace '[\r\n]', ''` to strip newlines before writing to $GITHUB_PATH via `Add-Content`, replacing the unsafe `echo "${install_dir}" | Out-File` pattern.
-
-Both fixes prevent attacker-controlled `install-dir` input values containing newline characters from injecting arbitrary entries into GITHUB_PATH.
+2. Windows (pwsh) step (line ~289): Replaced `echo "${install_dir}" | Out-File -FilePath $env:GITHUB_PATH` with a sanitized version that uses PowerShell's `-replace '[\r\n]', ''` to strip newlines before writing to $GITHUB_PATH, preventing newline injection.
 
