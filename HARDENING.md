@@ -8,18 +8,25 @@
 
 **Harden Agent Version:** `1`
 
-Action **sigstore--cosign-installer/v4.1.0** was hardened automatically. 1 finding(s) were identified and resolved across 1 iteration(s).
+Action **sigstore--cosign-installer/v4.1.0** was hardened automatically. 2 finding(s) were identified and resolved across 1 iteration(s).
 
 ## Findings Fixed
 
 ### github-env-injection (severity: high)
 
-Two steps write the attacker-controlled `inputs.install-dir` value to `$GITHUB_PATH` without the required sanitization (`printf '%s' ... | tr -d '\n\r'`). The value is routed through the `input_install_dir` env var but is never sanitized before the write. On Linux/macOS (step 2): `envsubst <<< "${input_install_dir}" >> "$GITHUB_PATH"`. On Windows (step 3): `echo "${install_dir}" | Out-File -FilePath $env:GITHUB_PATH`. An attacker can supply a newline-containing value for `inputs.install-dir` to inject arbitrary entries into `GITHUB_PATH`, potentially hijacking subsequent tool lookups.
+The Linux/macOS step writes the attacker-controlled `inputs.install-dir` value (via env var `input_install_dir`) directly to `$GITHUB_PATH` using `envsubst <<< "${input_install_dir}" >> "$GITHUB_PATH"` without the required sanitization (`printf '%s' ... | tr -d '\n\r'`). A malicious caller could supply a value containing embedded newlines to inject arbitrary entries into `$GITHUB_PATH`, potentially hijacking the PATH used by subsequent steps.
 
 Locations:
 
-- `action.yml:183`
-- `action.yml:190`
+- `action.yml:196`
+
+### github-env-injection (severity: high)
+
+The Windows step writes the attacker-controlled `inputs.install-dir` value (via env var `input_install_dir`) directly to `$env:GITHUB_PATH` using `echo "${install_dir}" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append` without any newline sanitization. A malicious caller could supply a value containing embedded newlines to inject arbitrary entries into `$GITHUB_PATH`, potentially hijacking the PATH used by subsequent steps.
+
+Locations:
+
+- `action.yml:204`
 
 ## Iteration Notes
 
@@ -29,11 +36,7 @@ Locations:
 
 **Notes:**
 
-Fixed both github-env-injection vulnerabilities in action.yml:
-
-1. Linux/macOS step (line ~183): Changed from `run: envsubst <<<"${input_install_dir}" >> "$GITHUB_PATH"` to a multi-line run that sanitizes the value: `safe_install_dir=$(envsubst <<<"${input_install_dir}" | tr -d '\n\r')` followed by `printf '%s\n' "${safe_install_dir}" >> "$GITHUB_PATH"`. This strips any newline characters that an attacker could inject via the `inputs.install-dir` value.
-
-2. Windows step (line ~190): Changed from `echo "${install_dir}" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append` to use `$safe_install_dir = $install_dir -replace '[\r\n]', ''` followed by `Add-Content -Path $env:GITHUB_PATH -Value $safe_install_dir -Encoding utf8`. This strips carriage returns and newlines before writing to $GITHUB_PATH.
-
-Both fixes prevent an attacker from injecting arbitrary entries into GITHUB_PATH by supplying a newline-containing value for `inputs.install-dir`.
+Fixed two github-env-injection findings in action.yml:
+1. Linux/macOS step (line ~196): Replaced single-line `envsubst <<<"${input_install_dir}" >> "$GITHUB_PATH"` with a multi-line run block that: (a) expands the variable with envsubst, (b) strips newlines using `printf '%s' "$expanded" | tr -d '\n\r'`, then (c) writes the sanitized value to $GITHUB_PATH.
+2. Windows step (line ~204): Replaced `echo "${install_dir}" | Out-File ...` with PowerShell that strips newlines using `-replace '[\r\n]', ''` before writing to $env:GITHUB_PATH via Add-Content. Both fixes prevent newline injection attacks where a malicious caller could supply embedded newlines in the install-dir input to inject arbitrary entries into $GITHUB_PATH.
 
